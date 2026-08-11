@@ -1,0 +1,1307 @@
+<!DOCTYPE html><html lang="en" xmlns="http://www.w3.org/1999/xhtml"><head><style type="text/css">
+ :root {
+ --panel-bg: #191919;
+ --menu-bg: #191919; /* right-click menu: always solid, never affected by transparent-mode */
+ --accent: #b3b3b3;
+ --ease-out: cubic-bezier(.22, 1, .36, 1);
+ --ease-in-out: cubic-bezier(.65, 0, .35, 1);
+ --ease-soft: cubic-bezier(.4, 0, .2, 1);
+ }
+ /* Toggled by window.SetTransparent(true) from C#. Monaco writes its
+ own background colors directly into an injected stylesheet based on
+ the active theme, so a CSS variable alone can't beat it — these need
+ !important. Combine this with setting
+ CoreWebView2Controller.DefaultBackgroundColor = Color.Transparent
+ in the WinForms host, or you'll just get a black/white WebView2
+ backdrop showing through instead of your form. */
+ html.transparent-mode {
+ --panel-bg: transparent;
+ }
+ html.transparent-mode,
+ html.transparent-mode body,
+ html.transparent-mode .monaco-editor,
+ html.transparent-mode .monaco-editor-background,
+ html.transparent-mode .monaco-editor .margin,
+ html.transparent-mode .monaco-editor .overflow-guard,
+ html.transparent-mode .monaco-editor .minimap,
+ html.transparent-mode .monaco-editor .scroll-decoration {
+ background-color: transparent !important;
+ }
+ html,
+ body {
+ background-color: var(--panel-bg);
+ width: 100%;
+ height: 100%;
+ margin: 0;
+ padding: 0;
+ overflow: hidden;
+ font-family: 'JetBrains Mono', Consolas, monospace;
+ color: white;
+ }
+ .margin:first-child {
+ background-size: cover;
+ background-repeat: no-repeat;
+ background-attachment: fixed;
+ }
+ .lines-content:nth-of-type(1),
+ .monaco-editor-background:nth-of-type(1) {
+ background-size: cover;
+ background-repeat: no-repeat;
+ background-attachment: fixed;
+ }
+ #app {
+ display: flex;
+ flex-direction: column;
+ width: 100%;
+ height: 100%;
+ }
+ #tabbar {
+ display: flex;
+ align-items: stretch;
+ justify-content: space-between;
+ background-color: var(--panel-bg);
+ border-bottom: 1px solid #303030;
+ flex: 0 0 auto;
+ -webkit-user-select: none;
+ user-select: none;
+ }
+ #tabs-wrapper {
+ flex: 1;
+ display: flex;
+ overflow-x: auto;
+ overflow-y: hidden;
+ }
+ #tabs-wrapper::-webkit-scrollbar {
+ height: 0px;
+ }
+ #tabs {
+ position: relative;
+ display: flex;
+ align-items: flex-end;
+ flex: 1;
+ }
+ #tab-indicator {
+ position: absolute;
+ bottom: 0;
+ left: 0;
+ height: 2px;
+ background: #e2e2e2;
+ z-index: 999;
+ pointer-events: none;
+ top: 0;
+ width: 0;
+ border-radius: 0 0 3px 3px;
+ opacity: 0;
+ transform: translateX(0);
+ transition:
+ transform .32s var(--ease-out),
+ width .32s var(--ease-out),
+ opacity .18s var(--ease-soft),
+ background-color .2s var(--ease-soft);
+ box-shadow: 0 0 6px 0 rgba(179, 179, 179, .35);
+ }
+ .tab {
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ gap: 7px;
+ padding: 9.2px 12px;
+ background-color: var(--panel-bg);
+ border-right: 1px solid #303030;
+ color: #7d7d7d;
+ font-size: 13px;
+ cursor: pointer;
+ max-width: 200px;
+ min-width: 0;
+ transition:
+ background-color .22s var(--ease-soft),
+ color .22s var(--ease-soft),
+ opacity .2s var(--ease-out),
+ transform .28s var(--ease-out);
+ opacity: 1;
+ transform: translateY(0) scale(1);
+ }
+ /* Update 1: Animación de arriba hacia abajo */
+ .tab.tab-enter {
+ opacity: 0;
+ transform: translateY(-15px) scale(1);
+ }
+ .tab.tab-exit {
+ opacity: 0;
+ transform: translateY(6px) scale(.96);
+ pointer-events: none;
+ }
+ .tab:hover:not(.active) {
+ background-color: var(--panel-bg);
+ color: var(--accent);
+ }
+ .tab.active {
+ background-color: var(--panel-bg);
+ color: var(--accent);
+ }
+ .tab .tab-icon {
+ display: flex;
+ align-items: center;
+ flex: 0 0 auto;
+ transition: transform .22s var(--ease-out);
+ }
+ .tab.active .tab-icon {
+ transform: scale(1.05);
+ }
+ .tab .tab-icon svg {
+ width: 14px;
+ height: 14px;
+ display: block;
+ }
+ .tab .tab-label {
+ overflow: hidden;
+ text-overflow: ellipsis;
+ white-space: nowrap;
+ border-radius: 3px;
+ transition: background-color .2s var(--ease-soft), box-shadow .2s var(--ease-soft);
+ }
+ .tab .tab-label[contenteditable="true"] {
+ outline: none;
+ color: white;
+ cursor: text;
+ background-color: var(--panel-bg);
+ box-shadow: 0 0 0 1px #3a3a3a;
+ padding: 0 3px;
+ margin: 0 -3px;
+ animation: rename-pop .22s var(--ease-out);
+ }
+ @keyframes rename-pop {
+ from {
+ transform: scale(.96);
+ }
+ to {
+ transform: scale(1);
+ }
+ }
+ .tab .tab-close {
+ flex: 0 0 auto;
+ border-radius: 3px;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ color: #5f5f5f;
+ line-height: 1;
+ padding: 2px;
+ transition: background-color .18s var(--ease-soft), color .18s var(--ease-soft), transform .18s var(--ease-out);
+ }
+ .tab .tab-close:hover {
+ background-color: var(--panel-bg);
+ color: #dbdbdb;
+ transform: scale(1.12);
+ }
+ #add-tab {
+ flex: 0 0 auto;
+ width: 38px;
+ border-left: 1px solid #303030;
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ color: #5f5f5f;
+ cursor: pointer;
+ font-size: 16px;
+ transition: color .18s var(--ease-soft), background-color .18s var(--ease-soft), transform .18s var(--ease-out);
+ }
+ #add-tab:hover {
+ color: var(--accent);
+ background-color: var(--panel-bg);
+ }
+ #add-tab:active {
+ transform: scale(.92);
+ }
+ #container {
+ flex: 1;
+ min-height: 0;
+ min-width: 0;
+ position: relative;
+ overflow: hidden;
+ }
+ #tab-ctx {
+ position: fixed;
+ z-index: 9999;
+ background-color: var(--menu-bg);
+ border: 1px solid #303030;
+ border-radius: 6px;
+ padding: 4px;
+ min-width: 160px;
+ box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+ -webkit-user-select: none;
+ user-select: none;
+ font-size: 12.5px;
+ display: block;
+ opacity: 0;
+ transform: scale(.94) translateY(-4px);
+ transform-origin: top left;
+ pointer-events: none;
+ transition: opacity .16s var(--ease-soft), transform .18s var(--ease-out);
+ }
+ #tab-ctx.open {
+ opacity: 1;
+ transform: scale(1) translateY(0);
+ pointer-events: auto;
+ }
+ #tab-ctx .ctx-item {
+ padding: 7px 10px;
+ border-radius: 4px;
+ color: #a0a0a0;
+ cursor: pointer;
+ white-space: nowrap;
+ display: flex;
+ align-items: center;
+ gap: 10px;
+ transition: background-color .15s var(--ease-soft), color .15s var(--ease-soft), transform .15s var(--ease-out);
+ }
+ #tab-ctx .ctx-icon {
+ display: flex;
+ align-items: center;
+ justify-content: center;
+ }
+ #tab-ctx .ctx-icon svg {
+ width: 14px;
+ height: 14px;
+ }
+ #tab-ctx .ctx-item:hover {
+ background-color: var(--panel-bg);
+ color: var(--accent);
+ transform: translateX(2px);
+ }
+ #tab-ctx .ctx-sep {
+ height: 1px;
+ margin: 4px 2px;
+ background-color: #424242;
+ }
+ /* Monaco Custom Styles ... */
+ .monaco-editor .suggest-widget {
+ background-color: #161616 !important;
+ border: 1px solid #303030 !important;
+ border-radius: 8px !important;
+ overflow: hidden;
+ box-shadow: 0 8px 24px rgba(0, 0, 0, .5) !important;
+ }
+ .monaco-editor .suggest-widget .monaco-list {
+ background-color: #161616 !important;
+ }
+ .monaco-editor .suggest-widget .monaco-list .monaco-list-row {
+ color: #a6a6a6 !important;
+ }
+ .monaco-editor .suggest-widget .monaco-list .monaco-list-row.focused,
+ .monaco-editor .suggest-widget .monaco-list .monaco-list-row:hover {
+ background-color: #1f1f1f !important;
+ border-radius: 4px !important;
+ }
+ .monaco-editor .suggest-widget .monaco-list .monaco-list-row .monaco-icon-label {
+ color: #a6a6a6 !important;
+ }
+ .monaco-editor .suggest-widget .monaco-list .monaco-list-row .highlight {
+ color: var(--accent) !important;
+ }
+ .monaco-editor .suggest-widget .details {
+ background-color: #161616 !important;
+ border: 1px solid #303030 !important;
+ border-radius: 8px !important;
+ color: #a6a6a6 !important;
+ }
+ .monaco-editor .suggest-widget .monaco-scrollable-element>.scrollbar>.slider {
+ background-color: #303030 !important;
+ border-radius: 4px !important;
+ }
+ .monaco-editor .parameter-hints-widget {
+ background-color: #161616 !important;
+ border: 1px solid #303030 !important;
+ border-radius: 8px !important;
+ color: #a6a6a6 !important;
+ }
+ .monaco-editor .parameter-hints-widget .signature {
+ color: #a6a6a6 !important;
+ }
+ </style>
+<style>
+  /* Loading Screen Styling */
+  #loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #0d0d0d; /* Matches dark theme background */
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 999999; /* Stay on top of everything */
+    transition: opacity 0.3s ease-out; /* Smooth fade out */
+    color: #888888;
+    font-family: 'Segoe UI', sans-serif;
+    font-size: 13px;
+  }
+
+  /* Lightweight CSS Spinner */
+  .spinner {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 12px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #3b82f6; /* Accent color */
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style><meta charset="utf-8" /><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"><title></title></head><body><div id="loading-screen"><div class="spinner"></div><p>Loading Editor...</p></div><div id="app"><div id="tabbar"><div id="tabs-wrapper"><div id="tabs"><div id="tab-indicator"></div></div></div><div id="add-tab" title="New Tab"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg></div></div><div id="container"></div></div><div id="tab-ctx"><div class="ctx-item" id="ctx-favorite"><span class="ctx-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path
+ d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg></span><span class="ctx-text">Add Favorite</span></div><div class="ctx-sep"></div><div class="ctx-item" id="ctx-rename"><span class="ctx-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 21h8" /><path
+ d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /></svg></span><span class="ctx-text">Rename</span></div><div class="ctx-item" id="ctx-duplicate"><span class="ctx-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2h-4a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V8" /><path d="M16.706 2.706A2.4 2.4 0 0 0 15 2v5a1 1 0 0 0 1 1h5a2.4 2.4 0 0 0-.706-1.706z" /><path d="M5 7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h8a2 2 0 0 0 1.732-1" /></svg></span><span class="ctx-text">Duplicate</span></div><div class="ctx-sep"></div><div class="ctx-item" id="ctx-close-others"><span class="ctx-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+ stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path
+ d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21" /><path d="m5.082 11.09 8.828 8.828" /></svg></span><span class="ctx-text">Close Others</span></div></div><script src="vs/loader.js"></script><script type="text/javascript">
+ // NOTE: this expects the Monaco 'vs' folder to sit next to this HTML
+ // file, served from a real origin (not file://). In the C# host,
+ // use CoreWebView2.SetVirtualHostNameToFolderMapping(...) and navigate
+ // to https://appassets/index.html — see the C# notes for this file.
+ require.config({
+ paths: {
+ 'vs': 'vs',
+ }
+ });
+ var GetText;
+ var SetText;
+ var SetTheme;
+ var SetScroll;
+ var ShowError;
+ var Refresh;
+ var SwitchMinimap;
+ var SwitchReadonly;
+ var SwitchRenderWhitespace;
+ var SwitchLinks;
+ var SwitchLineHeight;
+ var SwitchFontSize;
+ var SwitchFolding;
+ var SwitchAutoIndent;
+ var SwitchFontFamily;
+ var SwitchFontLigatures;
+ var AddIntellisense;
+ var editor;
+ var Proposals = [];
+ var LS_WELCOME_SEEN = 'anko_welcome_seen';
+ var LS_TABS = 'anko_tabs_state';
+ var LUA_ICON = '<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><path fill="#b3b3b3" d="M30 6a3.86 3.86 0 0 1-1.167 2.833a4.024 4.024 0 0 1-5.666 0A3.86 3.86 0 0 1 22 6a3.86 3.86 0 0 1 1.167-2.833a4.024 4.024 0 0 1 5.666 0A3.86 3.86 0 0 1 30 6m-9.208 5.208A10.6 10.6 0 0 0 13 8a10.6 10.6 0 0 0-7.792 3.208A10.6 10.6 0 0 0 2 19a10.6 10.6 0 0 0 3.208 7.792A10.6 10.6 0 0 0 13 30a10.6 10.6 0 0 0 7.792-3.208A10.6 10.6 0 0 0 24 19a10.6 10.6 0 0 0-3.208-7.792m-1.959 7.625a4.024 4.024 0 0 1-5.666 0a4.024 4.024 0 0 1 0-5.666a4.024 4.024 0 0 1 5.666 0a4.024 4.024 0 0 1 0 5.666"/></svg>';
+ var STAR_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="#E6B450" stroke="#E6B450" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></svg>';
+ var CLOSE_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+ var tabs = [];
+ var activeTabId = null;
+ var tabCounter = 0;
+ var tabsEl, containerEl, tabbarEl, tabsWrapperEl, indicatorEl;
+ function saveTabsState() {
+ try {
+ var data = {
+ counter: tabCounter,
+ activeId: activeTabId,
+ tabs: tabs
+ .filter(function (t) { return !t.closing; })
+ .map(function (t) {
+ var content = '';
+ try {
+ content = (t.id === activeTabId) ? editor.getValue() : t.model.getValue();
+ } catch (e) {
+ content = t.lastKnownContent || '';
+ }
+ t.lastKnownContent = content;
+ return { id: t.id, title: t.title, content: content, favorite: t.favorite };
+ })
+ };
+ localStorage.setItem(LS_TABS, JSON.stringify(data));
+ } catch (e) { }
+ }
+ // Typing fires onDidChangeModelContent on every keystroke. Saving on
+ // every single one means JSON-stringifying + writing *all* open tabs'
+ // full content to localStorage (a synchronous, main-thread call) per
+ // character — that's the main source of typing lag. Debounce it so it
+ // only actually saves once you pause; structural actions (new tab,
+ // close tab, rename, switch tab) still save immediately as before.
+ var saveTabsStateTimer = null;
+ function scheduleSaveTabsState() {
+ if (saveTabsStateTimer) clearTimeout(saveTabsStateTimer);
+ saveTabsStateTimer = setTimeout(function () {
+ saveTabsStateTimer = null;
+ saveTabsState();
+ }, 400);
+ }
+ function loadTabsState() {
+ try {
+ var raw = localStorage.getItem(LS_TABS);
+ if (!raw) return null;
+ return JSON.parse(raw);
+ } catch (e) {
+ return null;
+ }
+ }
+ function updateIndicator(tab, opts) {
+ if (!indicatorEl) return;
+ opts = opts || {};
+ if (!tab || !tab.el) {
+ indicatorEl.style.opacity = '0';
+ return;
+ }
+ var jump = !!opts.jump;
+ if (jump) {
+ indicatorEl.style.transition = 'none';
+ }
+ indicatorEl.style.width = tab.el.offsetWidth + 'px';
+ indicatorEl.style.transform = 'translateX(' + tab.el.offsetLeft + 'px)';
+ indicatorEl.style.opacity = '1';
+ if (jump) {
+ indicatorEl.getBoundingClientRect();
+ indicatorEl.style.transition = '';
+ }
+ }
+ function refreshIndicatorPosition() {
+ var active = tabs.find(function (t) { return t.id === activeTabId; });
+ updateIndicator(active);
+ }
+ function sortTabsDOM() {
+ // Sort tabs in array based on favorite status
+ tabs.sort(function (a, b) {
+ if (a.favorite === b.favorite) return 0;
+ return a.favorite ? -1 : 1;
+ });
+ // Re-append elements in sorted order
+ tabs.forEach(function (t) {
+ tabsEl.appendChild(t.el);
+ });
+ refreshIndicatorPosition();
+ }
+ function toggleFavorite(id) {
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab) return;
+ tab.favorite = !tab.favorite;
+ tab.el.querySelector('.tab-icon').innerHTML = tab.favorite ? STAR_ICON : LUA_ICON;
+ sortTabsDOM();
+ saveTabsState();
+ }
+ function createTab(title, content, opts) {
+ opts = opts || {};
+ tabCounter++;
+ var id = opts.id || tabCounter;
+ if (opts.id && opts.id > tabCounter) tabCounter = opts.id;
+ var model = monaco.editor.createModel(content || '', 'lua');
+ var isFav = !!opts.favorite;
+ var el = document.createElement('div');
+ el.className = 'tab tab-enter';
+ el.dataset.id = id;
+ el.innerHTML =
+ '<span class="tab-icon">' + (isFav ? STAR_ICON : LUA_ICON) + '</span>' +
+ '<span class="tab-label"></span>' +
+ '<span class="tab-close">' + CLOSE_ICON + '</span>';
+ el.querySelector('.tab-label').textContent = title;
+ el.addEventListener('click', function (e) {
+ if (e.target.closest('.tab-close')) return;
+ switchTab(id);
+ });
+ el.querySelector('.tab-close').addEventListener('click', function (e) {
+ e.stopPropagation();
+ closeTab(id);
+ });
+ el.addEventListener('contextmenu', function (e) {
+ e.preventDefault();
+ e.stopPropagation();
+ openTabContextMenu(e, id);
+ });
+ tabsEl.appendChild(el);
+ requestAnimationFrame(function () {
+ requestAnimationFrame(function () {
+ el.classList.remove('tab-enter');
+ if (id === activeTabId) refreshIndicatorPosition();
+ });
+ });
+ var tab = { id: id, title: title, model: model, el: el, favorite: isFav };
+ tabs.push(tab);
+ sortTabsDOM();
+ if (!opts.background) {
+ switchTab(id);
+ }
+ if (!opts.silent) {
+ saveTabsState();
+ }
+ requestAnimationFrame(function () {
+ el.scrollIntoView({ behavior: 'smooth', inline: 'end', block: 'nearest' });
+ });
+ return tab;
+ }
+ function switchTab(id) {
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab) return;
+ var isFirstActivation = activeTabId === null;
+ activeTabId = id;
+ editor.setModel(tab.model);
+ tabs.forEach(function (t) {
+ t.el.classList.toggle('active', t.id === id);
+ });
+ updateIndicator(tab, { jump: isFirstActivation });
+ editor.focus();
+ saveTabsState();
+ }
+ function closeTab(id) {
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab || tab.closing) return;
+ var openCount = tabs.filter(function (t) { return !t.closing; }).length;
+ if (openCount <= 1) return;
+ tab.closing = true;
+ var el = tab.el;
+ var finished = false;
+ function finish() {
+ if (finished) return;
+ finished = true;
+ el.removeEventListener('transitionend', finish);
+ if (el.parentNode) el.parentNode.removeChild(el);
+ var curIdx = tabs.indexOf(tab);
+ if (curIdx !== -1) tabs.splice(curIdx, 1);
+ tab.model.dispose();
+ if (activeTabId === id) {
+ var next = tabs[curIdx] || tabs[curIdx - 1] || tabs[0];
+ if (next) switchTab(next.id);
+ } else {
+ refreshIndicatorPosition();
+ }
+ saveTabsState();
+ }
+ el.addEventListener('transitionend', finish);
+ el.classList.add('tab-exit');
+ setTimeout(finish, 320);
+ }
+ function closeOtherTabs(id) {
+ // Evitamos cerrar el que llamó a la función y los que son favoritos
+ var toClose = tabs.filter(function (t) { return t.id !== id && !t.favorite; }).map(function (t) { return t.id; });
+ toClose.forEach(function (otherId) { closeTab(otherId); });
+ switchTab(id);
+ }
+ function duplicateTab(id) {
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab) return;
+ createTab(tab.title, tab.model.getValue(), { favorite: tab.favorite });
+ }
+ function resetAppToFreshState() {
+ closeTabContextMenu();
+ tabs.forEach(function (t) {
+ if (t.el && t.el.parentNode) t.el.parentNode.removeChild(t.el);
+ try { t.model.dispose(); } catch (e) { }
+ });
+ tabs = [];
+ activeTabId = null;
+ tabCounter = 0;
+ updateIndicator(null);
+ var first = createTab('Untitled', '', { silent: true });
+ typeWelcome(first.model);
+ saveTabsState();
+ }
+ var pasteTypingState = null;
+ function flushPendingPasteAnimation() {
+ if (pasteTypingState) {
+ clearInterval(pasteTypingState.handle);
+ try { pasteTypingState.finishNow(); } catch (e) { }
+ pasteTypingState = null;
+ }
+ }
+ function typePastedText(text) {
+ flushPendingPasteAnimation();
+ flushPendingDocTypeAnimation();
+ if (!text) return;
+ var model = editor.getModel();
+ if (!model) return;
+ var sel = editor.getSelection();
+ if (sel && !sel.isEmpty()) {
+ model.applyEdits([{ range: sel, text: '' }]);
+ }
+ var startOffset = model.getOffsetAt({
+ lineNumber: sel ? sel.startLineNumber : 1,
+ column: sel ? sel.startColumn : 1
+ });
+ var total = text.length;
+ var steps = Math.max(1, Math.min(total, 40));
+ var chunkSize = Math.ceil(total / steps);
+ var duration = Math.min(500, Math.max(120, total * 1.5));
+ var delay = duration / steps;
+ var written = 0;
+ editor.updateOptions({ readOnly: true });
+ function writeChunk(chunk) {
+ var insertPos = model.getPositionAt(startOffset + written);
+ model.applyEdits([{
+ range: new monaco.Range(insertPos.lineNumber, insertPos.column, insertPos.lineNumber, insertPos.column),
+ text: chunk
+ }]);
+ }
+ function finishNow() {
+ if (written < total) {
+ writeChunk(text.slice(written));
+ written = total;
+ }
+ var curPos = model.getPositionAt(startOffset + written);
+ editor.setPosition(curPos);
+ editor.updateOptions({ readOnly: false });
+ }
+ var handle = setInterval(function () {
+ try {
+ var next = Math.min(written + chunkSize, total);
+ writeChunk(text.slice(written, next));
+ written = next;
+ var curPos = model.getPositionAt(startOffset + written);
+ editor.setPosition(curPos);
+ editor.revealPositionInCenterIfOutsideViewport(curPos);
+ } catch (e) {
+ clearInterval(handle);
+ pasteTypingState = null;
+ try { editor.updateOptions({ readOnly: false }); } catch (e2) { }
+ return;
+ }
+ if (written >= total) {
+ clearInterval(handle);
+ pasteTypingState = null;
+ editor.updateOptions({ readOnly: false });
+ editor.focus();
+ }
+ }, delay);
+ pasteTypingState = { handle: handle, finishNow: finishNow };
+ }
+ function rawSetText(x) {
+ editor.setValue(x || '');
+ }
+ var docTypingState = null;
+ function flushPendingDocTypeAnimation() {
+ if (docTypingState) {
+ clearInterval(docTypingState.handle);
+ try { docTypingState.finishNow(); } catch (e) { }
+ docTypingState = null;
+ }
+ }
+ function typeEntireDocument(text) {
+ flushPendingDocTypeAnimation();
+ flushPendingPasteAnimation();
+ text = text || '';
+ var model = editor.getModel();
+ if (!model) { rawSetText(text); return; }
+ model.setValue('');
+ if (!text) return;
+ var total = text.length;
+ var steps = Math.max(1, Math.min(total, 40));
+ var chunkSize = Math.ceil(total / steps);
+ var duration = Math.min(500, Math.max(120, total * 1.5));
+ var delay = duration / steps;
+ var written = 0;
+ editor.updateOptions({ readOnly: true });
+ function finishNow() {
+ if (written < total) {
+ model.setValue(text);
+ written = total;
+ }
+ try {
+ var pos = model.getPositionAt(text.length);
+ editor.setPosition(pos);
+ } catch (e) { }
+ editor.updateOptions({ readOnly: false });
+ }
+ var handle = setInterval(function () {
+ try {
+ var next = Math.min(written + chunkSize, total);
+ model.setValue(text.slice(0, next));
+ written = next;
+ var pos = model.getPositionAt(written);
+ editor.setPosition(pos);
+ editor.revealPositionInCenterIfOutsideViewport(pos);
+ } catch (e) {
+ clearInterval(handle);
+ docTypingState = null;
+ try { editor.updateOptions({ readOnly: false }); } catch (e2) { }
+ return;
+ }
+ if (written >= total) {
+ clearInterval(handle);
+ docTypingState = null;
+ editor.updateOptions({ readOnly: false });
+ }
+ }, delay);
+ docTypingState = { handle: handle, finishNow: finishNow };
+ }
+ function startRenameTab(id) {
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab) return;
+ var label = tab.el.querySelector('.tab-label');
+ label.contentEditable = 'true';
+ label.spellcheck = false;
+ var range = document.createRange();
+ range.selectNodeContents(label);
+ var sel = window.getSelection();
+ sel.removeAllRanges();
+ sel.addRange(range);
+ label.focus();
+ function finishRename(save) {
+ label.contentEditable = 'false';
+ label.removeEventListener('blur', onBlur);
+ label.removeEventListener('keydown', onKeydown);
+ if (save) {
+ var newTitle = label.textContent.trim() || tab.title;
+ tab.title = newTitle;
+ label.textContent = newTitle;
+ saveTabsState();
+ requestAnimationFrame(refreshIndicatorPosition);
+ } else {
+ label.textContent = tab.title;
+ }
+ }
+ function onBlur() { finishRename(true); }
+ function onKeydown(e) {
+ if (e.key === 'Enter') {
+ e.preventDefault();
+ label.blur();
+ } else if (e.key === 'Escape') {
+ e.preventDefault();
+ finishRename(false);
+ label.blur();
+ }
+ }
+ label.addEventListener('blur', onBlur);
+ label.addEventListener('keydown', onKeydown);
+ }
+ var tabCtxEl, ctxTargetId = null;
+ function openTabContextMenu(e, id) {
+ ctxTargetId = id;
+ // Cambia el texto del botón Favorite en base a si es favorito o no
+ var tab = tabs.find(function (t) { return t.id === id; });
+ var favBtn = document.querySelector('#ctx-favorite .ctx-text');
+ favBtn.textContent = tab.favorite ? 'Remove Favorite' : 'Add Favorite';
+ tabCtxEl.style.left = e.clientX + 'px';
+ tabCtxEl.style.top = e.clientY + 'px';
+ tabCtxEl.classList.add('open');
+ }
+ function closeTabContextMenu() {
+ tabCtxEl.classList.remove('open');
+ ctxTargetId = null;
+ }
+ var welcomeTypingHandle = null;
+ function typeWelcome(model) {
+ if (welcomeTypingHandle) { clearInterval(welcomeTypingHandle); welcomeTypingHandle = null; }
+ var text = "print('I Love The Ugly Gamer!')";
+ editor.updateOptions({ readOnly: true });
+ var i = 0;
+ model.setValue('');
+ welcomeTypingHandle = setInterval(function () {
+ i++;
+ try {
+ model.setValue(text.slice(0, i));
+ var pos = model.getPositionAt(text.slice(0, i).length);
+ editor.setPosition(pos);
+ } catch (e) {
+ clearInterval(welcomeTypingHandle);
+ welcomeTypingHandle = null;
+ return;
+ }
+ if (i >= text.length) {
+ clearInterval(welcomeTypingHandle);
+ welcomeTypingHandle = null;
+ editor.updateOptions({ readOnly: false });
+ try { localStorage.setItem(LS_WELCOME_SEEN, '1'); } catch (e) { }
+ }
+ }, 45);
+ }
+ function getDependencyProposals() {
+ let newProposals = [];
+ for (let index = 0; index < Proposals.length; index++) {
+ const element = Proposals[index];
+ let newElement = {}
+ for (const key in element) {
+ if (key == "__children__") {
+ continue;
+ };
+ newElement[key] = element[key];
+ }
+ newProposals.push(newElement)
+ }
+ return newProposals;
+ }
+ function hideLoadingScreen() {
+     var loader = document.getElementById('loading-screen');
+     if (loader) {
+         loader.style.opacity = '0';
+         setTimeout(function () {
+             loader.style.display = 'none';
+         }, 300);
+     }
+ }
+ require(['vs/editor/editor.main'], function () {
+ monaco.editor.defineTheme('Dark', {
+ base: 'vs-dark',
+ inherit: true,
+ rules: [
+ { token: 'variable.language.self', foreground: 'D8DEE9' },
+ { token: 'variable.parameter.variadic', foreground: 'C8D0DA' },
+ { token: 'variable.parameter.function', foreground: 'D8DEE9' },
+ { token: 'variable.other.constant', foreground: 'D8DEE9' },
+ { token: 'variable.property', foreground: 'AFC7E8' },
+ { token: 'variable.object.property', foreground: 'AFC7E8' },
+ { token: 'keyword', foreground: '82AAFF' },
+ { token: 'keyword.local', foreground: '82AAFF', fontStyle: 'bold' },
+ { token: 'keyword.operator', foreground: '7F8FA6' },
+ { token: 'keyword.operator.type.annotation', foreground: '6F7684' },
+ { token: 'keyword.operator.typedef.annotation', foreground: '6F7684' },
+ { token: 'keyword.control.export', foreground: '82AAFF', fontStyle: 'bold' },
+ { token: 'operator', foreground: '8A94A6' },
+ { token: 'operator.type', foreground: '8A94A6' },
+ { token: 'operator.special', foreground: '97A4B8' },
+ { token: 'entity.name.type.alias', foreground: 'D7BA7D' },
+ { token: 'entity.name.function', foreground: '8FD3FF' },
+ { token: 'global', foreground: '8FD3FF', fontStyle: 'bold' },
+ { token: 'support.function', foreground: '8FD3FF' },
+ { token: 'support.function.library', foreground: '8FD3FF' },
+ { token: 'support.type', foreground: 'D7BA7D' },
+ { token: 'storage.type', foreground: 'D7BA7D' },
+ { token: 'comment', foreground: '5F6775', fontStyle: 'italic' },
+ { token: 'comment.highlight.title', foreground: '7A8394', fontStyle: 'italic' },
+ { token: 'comment.highlight.name', foreground: '7A8394', fontStyle: 'italic' },
+ { token: 'comment.delimiter.modifier', foreground: '5F6775', fontStyle: 'italic' },
+ { token: 'comment.highlight.modifier', foreground: '7A8394', fontStyle: 'italic' },
+ { token: 'comment.highlight.descriptor', foreground: '7A8394', fontStyle: 'italic' },
+ { token: 'delimiter.longstring', foreground: '8B949E' },
+ { token: 'delimiter.bracket', foreground: '8B949E' },
+ { token: 'delimiter.array', foreground: '8B949E' },
+ { token: 'delimiter.parenthesis', foreground: '8B949E' },
+ { token: 'delimiter', foreground: '8B949E' },
+ { token: 'string', foreground: 'A7C080' },
+ { token: 'longstring', foreground: 'A7C080' },
+ { token: 'string.delimeter', foreground: 'A7C080' },
+ { token: 'string.escape', foreground: 'E6B450' },
+ { token: 'punctuation.separator.arguments', foreground: '8B949E' },
+ { token: 'punctuation.separator.parameter', foreground: '8B949E' },
+ { token: 'punctuation.separator.table', foreground: '8B949E' },
+ { token: 'punctuation.definition.block', foreground: '8B949E' },
+ { token: 'punctuation.definition.parameters', foreground: '8B949E' },
+ { token: 'punctuation.definition.typeparameters', foreground: '8B949E' },
+ { token: 'constant.language', foreground: 'E6B450' },
+ { token: 'number', foreground: 'E6B450' },
+ { token: 'constants', foreground: 'E6B450' }
+ ],
+ colors: {
+ 'editor.background': '#191919',
+ 'minimap.background': '#181818',
+ 'editorCursor.foreground': '#5e5e5e',
+ 'editorCursor.background': '#5e5e5e'
+ }
+ });
+ require(['vs/basic-languages/monaco.contribution'], function () {
+ monaco.languages.registerCompletionItemProvider('lua', {
+ provideCompletionItems: function (model, position) {
+ return {
+ suggestions: getDependencyProposals(),
+ };
+ },
+ triggerCharacters: ['.', ':', '"'],
+ });
+ tabsEl = document.getElementById('tabs');
+ tabsWrapperEl = document.getElementById('tabs-wrapper');
+ containerEl = document.getElementById('container');
+ tabbarEl = document.getElementById('tabbar');
+ tabCtxEl = document.getElementById('tab-ctx');
+ indicatorEl = document.getElementById('tab-indicator');
+ editor = monaco.editor.create(containerEl, {
+ theme: "Dark",
+ automaticLayout: true,
+ folding: true,
+ dragAndDrop: true,
+ padding: {
+ top: 2,
+ bottom: 0
+ },
+ links: true,
+ minimap: {
+ enabled: false
+ },
+ wordWrap: "off",
+ showFoldingControls: "mouseover",
+ smoothScrolling: true,
+ stopRenderingLineAfter: 6500,
+ fontSize: 12,
+ fontFamily: "'JetBrains Mono', Consolas, monospace",
+ cursorBlinking: "smooth",
+ scrollBeyondLastLine: false,
+ cursorSmoothCaretAnimation: true,
+ foldingHighlight: false,
+ fontLigatures: true,
+ formatOnPaste: true,
+ showDeprecated: true,
+ lineNumbersMinChars: 3,
+ lineNumbers: "on",
+ lineDecorationsWidth: 0,
+ glyphMargin: false,
+ renderLineHighlight: "none",
+ matchBrackets: "never",
+ suggest: {
+ snippetsPreventQuickSuggestions: false,
+ }
+ });
+ // MONACO READY
+ window.monacoReady = true;
+ hideLoadingScreen();
+ // SETTINGS DESDE C#
+ window.SwitchWordWrap = function (enabled) {
+ if (!editor) return;
+ editor.updateOptions({
+ wordWrap: enabled ? "on" : "off"
+ });
+ };
+ window.SwitchMinimap = function (enabled) {
+ if (!editor) return;
+ editor.updateOptions({
+ minimap: {
+ enabled: enabled
+ }
+ });
+ };
+ window.SetTransparent = function (enabled) {
+ document.documentElement.classList.toggle('transparent-mode', !!enabled);
+ };
+ document.addEventListener('keydown', function (e) {
+ var key = (e.key || '').toLowerCase();
+ if (e.ctrlKey && e.altKey && key === 'k') {
+ e.preventDefault();
+ e.stopPropagation();
+ try { localStorage.clear(); } catch (err) { }
+ resetAppToFreshState();
+ }
+ }, true);
+ document.addEventListener('paste', function (e) {
+ if (!containerEl.contains(e.target)) return;
+ var cd = e.clipboardData || window.clipboardData;
+ var text = cd ? cd.getData('text/plain') : '';
+ e.preventDefault();
+ e.stopPropagation();
+ typePastedText(text);
+ }, true);
+ document.getElementById('add-tab').addEventListener('click', function () {
+ createTab('Untitled', '');
+ });
+ tabsWrapperEl.addEventListener('wheel', function (e) {
+ if (e.deltaY !== 0) {
+ e.preventDefault();
+ tabsWrapperEl.scrollLeft += e.deltaY;
+ }
+ }, { passive: false });
+ document.getElementById('ctx-favorite').addEventListener('click', function () {
+ if (ctxTargetId != null) toggleFavorite(ctxTargetId);
+ closeTabContextMenu();
+ });
+ document.getElementById('ctx-rename').addEventListener('click', function () {
+ if (ctxTargetId != null) startRenameTab(ctxTargetId);
+ closeTabContextMenu();
+ });
+ document.getElementById('ctx-duplicate').addEventListener('click', function () {
+ if (ctxTargetId != null) duplicateTab(ctxTargetId);
+ closeTabContextMenu();
+ });
+ document.getElementById('ctx-close-others').addEventListener('click', function () {
+ if (ctxTargetId != null) closeOtherTabs(ctxTargetId);
+ closeTabContextMenu();
+ });
+ document.addEventListener('click', function (e) {
+ if (!tabCtxEl.contains(e.target)) closeTabContextMenu();
+ });
+ document.addEventListener('contextmenu', function (e) {
+ if (!e.target.closest('.tab')) closeTabContextMenu();
+ });
+ window.addEventListener('resize', function () {
+ refreshIndicatorPosition();
+ });
+ window.addEventListener('beforeunload', function () {
+ if (saveTabsStateTimer) {
+ clearTimeout(saveTabsStateTimer);
+ saveTabsState();
+ }
+ });
+ var savedState = loadTabsState();
+ if (savedState && savedState.tabs && savedState.tabs.length) {
+ savedState.tabs.forEach(function (t, idx) {
+ createTab(t.title, t.content, { id: t.id, favorite: t.favorite, background: true, silent: true });
+ });
+ var toActivate = savedState.activeId && tabs.find(function (t) { return t.id === savedState.activeId; })
+ ? savedState.activeId
+ : tabs[0].id;
+ switchTab(toActivate);
+ } else {
+ var first = createTab('Untitled', '', { silent: true });
+ var hostedInWebView2 = !!(window.chrome && window.chrome.webview);
+ if (!localStorage.getItem(LS_WELCOME_SEEN) && !hostedInWebView2) {
+ // Skip the animated welcome demo when embedded in the C# app —
+ // it types into the model on a timer and would otherwise race
+ // with (and overwrite) whatever the host sets via SetFirstTab.
+ typeWelcome(first.model);
+ }
+ saveTabsState();
+ }
+ editor.onDidChangeModelContent(function () {
+ scheduleSaveTabsState();
+ });
+ // Everything (editor + tabs + API) is ready for the host to drive.
+ window.appReady = true;
+ if (window.chrome && window.chrome.webview) {
+ window.chrome.webview.postMessage('ready');
+ }
+ });
+ window.onresize = function () {
+ editor.layout();
+ }
+ Cut = function () {
+ editor.focus();
+ document.execCommand('cut');
+ }
+ Copy = function () {
+ editor.focus();
+ document.execCommand('copy');
+ }
+ Paste = function () {
+ editor.focus();
+ document.execCommand('paste');
+ }
+ Undo = function () {
+ editor.focus();
+ document.execCommand('undo');
+ }
+ Redo = function () {
+ editor.focus();
+ document.execCommand('redo');
+ }
+ Delete = function () {
+ editor.focus();
+ document.execCommand('delete');
+ }
+ SelectAll = function () {
+ editor.focus();
+ document.execCommand('selectAll');
+ }
+ GetText = function () {
+ return editor.getValue();
+ }
+ SetText = function (x) {
+ typeEntireDocument(x);
+ }
+ window.SetTextInstant = function (x) {
+ // Same as SetText but no typing animation — sets the *active* tab
+ // content immediately. Use this for programmatic loads from C#.
+ flushPendingDocTypeAnimation();
+ rawSetText(x);
+ }
+ window.GetTabs = function () {
+ // Returns [{ id, title, favorite, active }] — call this from C#
+ // (ExecuteScriptAsync JSON-serializes the result automatically) to
+ // find tab ids before renaming/setting content on a specific tab.
+ return tabs.map(function (t) {
+ return { id: t.id, title: t.title, favorite: t.favorite, active: t.id === activeTabId };
+ });
+ }
+ window.SetTabTitle = function (id, title) {
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab) return false;
+ tab.title = title;
+ tab.el.querySelector('.tab-label').textContent = title;
+ saveTabsState();
+ refreshIndicatorPosition();
+ return true;
+ }
+ window.SetTabText = function (id, text) {
+ // Sets a tab's content directly on its model, instantly, whether or
+ // not that tab is currently active/visible.
+ var tab = tabs.find(function (t) { return t.id === id; });
+ if (!tab) return false;
+ tab.model.setValue(text || '');
+ if (tab.id === activeTabId) {
+ flushPendingDocTypeAnimation();
+ var pos = tab.model.getPositionAt(tab.model.getValue().length);
+ editor.setPosition(pos);
+ }
+ saveTabsState();
+ return true;
+ }
+ window.SetFirstTab = function (title, text) {
+ // Convenience for the common "configure the first tab on startup"
+ // case. Renames + fills the earliest-created (lowest id) tab.
+ if (!tabs.length) return false;
+ var first = tabs.reduce(function (a, b) { return a.id < b.id ? a : b; });
+ if (title != null) window.SetTabTitle(first.id, title);
+ if (text != null) window.SetTabText(first.id, text);
+ return true;
+ }
+ window.CreateTab = function (title, text) {
+ var tab = createTab(title || 'Untitled', text || '');
+ return tab.id;
+ }
+ window.CloseTab = function (id) {
+ closeTab(id);
+ }
+ window.ResetAppData = function () {
+    try {
+        localStorage.clear();
+    } catch (err) { }
+    resetAppToFreshState();
+ };
+ GetProposals = function () {
+ return Proposals;
+ }
+ OnDidChangeContent = function (callback) {
+ return editor.onDidChangeModelContent((event) => {
+ callback(editor.getValue());
+ });
+ }
+ OnDidChangeCursorPosition = function (callback) {
+ return editor.onDidChangeCursorPosition((event) => {
+ callback(event.position);
+ });
+ }
+ SetTheme = function (themeName) {
+ // Accepts any registered theme name: the built-ins 'vs', 'vs-dark',
+ // 'hc-black', 'hc-light', the custom 'Dark' defined above, or
+ // anything registered via DefineTheme(name, themeJson) below.
+ monaco.editor.setTheme(themeName);
+ }
+ window.DefineTheme = function (themeName, themeJson) {
+ // themeJson is a JSON *string* (easy to build from C#'s
+ // System.Text.Json). Shape matches monaco.editor.IStandaloneThemeData:
+ // { base: 'vs' | 'vs-dark' | 'hc-black' | 'hc-light',
+ // inherit: true, rules: [...], colors: {...} }
+ var data = typeof themeJson === 'string' ? JSON.parse(themeJson) : themeJson;
+ monaco.editor.defineTheme(themeName, data);
+ }
+ SwitchMinimap = function (flag) {
+ editor.updateOptions({
+ minimap: {
+ enabled: flag,
+ }
+ });
+ }
+ SwitchReadonly = function (flag) {
+ editor.updateOptions({
+ readOnly: flag,
+ });
+ }
+ SwitchRenderWhitespace = function (op) {
+ editor.updateOptions({
+ renderWhitespace: op,
+ });
+ }
+ SwitchLinks = function (flag) {
+ editor.updateOptions({
+ links: flag,
+ });
+ }
+ SwitchLineHeight = function (num) {
+ editor.updateOptions({
+ lineHeight: num,
+ });
+ }
+ SwitchFontSize = function (num) {
+ editor.updateOptions({
+ fontSize: num,
+ });
+ }
+ SwitchFolding = function (flag) {
+ editor.updateOptions({
+ folding: flag,
+ });
+ }
+ SwitchAutoIndent = function (flag) {
+ editor.updateOptions({
+ autoIndent: flag,
+ });
+ }
+ SwitchFontFamily = function (name) {
+ editor.updateOptions({
+ fontFamily: name,
+ });
+ }
+ SwitchFontLigatures = function (flag) {
+ editor.updateOptions({
+ fontLigatures: flag,
+ });
+ }
+ ShowError = function (line, column, endline, endcolumn, errMessage) {
+ editor.revealPositionInCenter({ lineNumber: line, column: column });
+ editor.deltaDecorations([], [
+ {
+ range: new monaco.Range(line, column, endline, endcolumn),
+ options: {
+ inlineClassName: 'squiggly-error',
+ hoverMessage: {
+ value: errMessage,
+ }
+ },
+ },
+ ]);
+ }
+ AddSnippet = function (kindName, snippetName, data) {
+ let snippet = {
+ insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+ kind: monaco.languages.CompletionItemKind[kindName],
+ };
+ for (const key in data) {
+ let value = data[key];
+ if (key == "insertText" && typeof value == "object") {
+ value = value.join("\n");
+ };
+ snippet[key] = value;
+ }
+ if (!snippet.label) {
+ snippet.label = snippetName
+ }
+ if (!snippet.insertText) {
+ snippet.insertText = snippetName
+ }
+ Proposals.push(snippet);
+ }
+ AddRawSnippet = function (data) {
+ Proposals.push(data);
+ }
+ SetScroll = function (line) {
+ editor.revealLineInCenter({ lineNumber: line });
+ }
+ Refresh = function () {
+ var Text = GetText();
+ rawSetText(Text);
+ editor.trigger('keyboard', 'type', { text: Text });
+ }
+ AddIntellisense = function (l, k, d, i) {
+ var t;
+ switch (k) {
+ case "Class": t = monaco.languages.CompletionItemKind.Class; break;
+ case "Color": t = monaco.languages.CompletionItemKind.Color; break;
+ case "Constructor": t = monaco.languages.CompletionItemKind.Constructor; break;
+ case "Enum": t = monaco.languages.CompletionItemKind.Enum; break;
+ case "Field": t = monaco.languages.CompletionItemKind.Field; break;
+ case "File": t = monaco.languages.CompletionItemKind.File; break;
+ case "Folder": t = monaco.languages.CompletionItemKind.Folder; break;
+ case "Function": t = monaco.languages.CompletionItemKind.Function; break;
+ case "Interface": t = monaco.languages.CompletionItemKind.Interface; break;
+ case "Keyword": t = monaco.languages.CompletionItemKind.Keyword; break;
+ case "Method": t = monaco.languages.CompletionItemKind.Method; break;
+ case "Module": t = monaco.languages.CompletionItemKind.Module; break;
+ case "Property": t = monaco.languages.CompletionItemKind.Property; break;
+ case "Reference": t = monaco.languages.CompletionItemKind.Reference; break;
+ case "Snippet": t = monaco.languages.CompletionItemKind.Snippet; break;
+ case "Text": t = monaco.languages.CompletionItemKind.Text; break;
+ case "Unit": t = monaco.languages.CompletionItemKind.Unit; break;
+ case "Value": t = monaco.languages.CompletionItemKind.Value; break;
+ case "Variable": t = monaco.languages.CompletionItemKind.Variable; break;
+ }
+ document.getElementsByClassName("lines-content monaco-editor-background")[0].style.backgroundImage = "url(https://c.tenor.com/StDUfEak8SkAAAAC/tenor.gif)"
+ document.getElementsByClassName("margin")[0].style.backgroundImage = "url(https://c.tenor.com/StDUfEak8SkAAAAC/tenor.gif)"
+ Proposals.push({
+ label: l,
+ kind: t,
+ detail: d,
+ insertText: i
+ });
+ }
+ });
+ </script></body></html>
